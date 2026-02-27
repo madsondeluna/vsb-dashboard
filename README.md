@@ -1,11 +1,5 @@
 # VigiSaúde Brasil - Dashboard de Vigilância
 
-<div align="center">
-
-**Dashboard interativo para monitoramento de doenças infecciosas no Brasil, com correlação de dados de saneamento.**
-
-</div>
-
 ---
 
 ## Sobre o Projeto
