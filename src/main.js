@@ -3,7 +3,7 @@
  * Orchestrates all components and views
  */
 import { fetchNationalOverview, fetchDiseaseData, getSanitationData, getDiseaseInfo, CHART_COLORS } from './services/api.js';
-import { initMap, loadGeoJSON, fitRegion, updateMapColors } from './components/map.js';
+import { initMap, loadGeoJSON, fitRegion, updateMapColors, setMapDisease } from './components/map.js';
 import { renderAllCharts, renderMainChart, renderSanitationCorrelation } from './components/charts.js';
 import { initCards, renderCards, updateNationalSummary, setActiveDisease } from './components/cards.js';
 import { initRegionFilters, initTrackerSelectors, initPeriodControls, getPeriod, initSearch, initPathogenTags, initChartToggle } from './components/filters.js';
@@ -253,6 +253,7 @@ async function init() {
     const cardsContainer = document.getElementById('disease-cards');
     initCards(cardsContainer, async (disease) => {
         state.currentDisease = disease;
+        setMapDisease(disease);
         await loadNationalData(disease);
     });
 
