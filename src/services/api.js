@@ -62,6 +62,7 @@ export async function fetchDiseaseData(geocode, disease = 'dengue', ewStart = 1,
 }
 
 // Fetch alert data for multiple capital cities (for national overview)
+// Falls back to previous years if no data found (e.g. Zika)
 export async function fetchNationalOverview(disease = 'dengue') {
     const key = cacheKey('national', disease);
     return cachedFetch(key, async () => {
@@ -96,30 +97,43 @@ export async function fetchNationalOverview(disease = 'dengue') {
             { name: 'Palmas', geocode: 1721000, uf: 'TO' },
         ];
 
-        // Fetch latest week for each capital (last 4 weeks)
         const currentDate = new Date();
         const currentYear = currentDate.getFullYear();
-        // Calculate approximate epidemiological week
         const startOfYear = new Date(currentYear, 0, 1);
         const dayOfYear = Math.floor((currentDate - startOfYear) / 86400000);
         const currentEW = Math.min(Math.ceil(dayOfYear / 7), 52);
         const startEW = Math.max(1, currentEW - 4);
 
-        const results = await Promise.allSettled(
-            capitals.map(async (cap) => {
-                try {
-                    const data = await fetchDiseaseData(cap.geocode, disease, startEW, currentEW, currentYear, currentYear);
-                    const latest = data.length > 0 ? data[data.length - 1] : null;
-                    return { ...cap, data, latest };
-                } catch {
-                    return { ...cap, data: [], latest: null };
-                }
-            })
-        );
+        // Helper: fetch all capitals for a given year
+        async function fetchForYear(year, ewStart, ewEnd) {
+            const results = await Promise.allSettled(
+                capitals.map(async (cap) => {
+                    try {
+                        const data = await fetchDiseaseData(cap.geocode, disease, ewStart, ewEnd, year, year);
+                        const latest = data.length > 0 ? data[data.length - 1] : null;
+                        return { ...cap, data, latest, dataYear: year };
+                    } catch {
+                        return { ...cap, data: [], latest: null, dataYear: year };
+                    }
+                })
+            );
+            return results.filter(r => r.status === 'fulfilled').map(r => r.value);
+        }
 
-        return results
-            .filter(r => r.status === 'fulfilled')
-            .map(r => r.value);
+        // Try current year first
+        let data = await fetchForYear(currentYear, startEW, currentEW);
+        let hasData = data.some(d => d.latest !== null);
+
+        // If no data, try previous years (up to 3 years back)
+        if (!hasData) {
+            for (let y = currentYear - 1; y >= currentYear - 3; y--) {
+                data = await fetchForYear(y, 1, 52);
+                hasData = data.some(d => d.latest !== null);
+                if (hasData) break;
+            }
+        }
+
+        return data;
     });
 }
 

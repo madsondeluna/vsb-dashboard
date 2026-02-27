@@ -35,6 +35,7 @@ export function renderCards(container, diseaseDataMap = null) {
         let avgRt = 0;
         let maxLevel = 1;
         let validRtCount = 0;
+        let dataYear = new Date().getFullYear();
 
         if (nationalData && Array.isArray(nationalData)) {
             nationalData.forEach(cap => {
@@ -46,9 +47,13 @@ export function renderCards(container, diseaseDataMap = null) {
                     }
                     if (cap.latest.nivel > maxLevel) maxLevel = cap.latest.nivel;
                 }
+                if (cap.dataYear) dataYear = cap.dataYear;
             });
             if (validRtCount > 0) avgRt /= validRtCount;
         }
+
+        const currentYear = new Date().getFullYear();
+        const isOldData = dataYear < currentYear;
 
         const alertInfo = getAlertLevel(maxLevel);
 
@@ -72,6 +77,7 @@ export function renderCards(container, diseaseDataMap = null) {
           <span class="disease-card__stat-label">Rt médio</span>
         </div>
       </div>
+      ${isOldData ? `<div class="disease-card__year-note">⚠ Dados de ${dataYear}</div>` : ''}
     `;
 
         card.addEventListener('click', () => {

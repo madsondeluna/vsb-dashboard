@@ -1,8 +1,8 @@
-# VigiSaúde Brasil — Dashboard de Vigilância Epidemiológica
+# VigiSaúde Brasil - — Dashboard de Vigilância
 
 <div align="center">
 
-**Dashboard interativo para monitoramento de doenças infecciosas no Brasil, com correlação de dados de saneamento (esgoto).**
+**Dashboard interativo para monitoramento de doenças infecciosas no Brasil, com correlação de dados de saneamento.**
 
 [![JavaScript](https://img.shields.io/badge/JavaScript-ES2022-F7DF1E?logo=javascript&logoColor=black)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
 [![Vite](https://img.shields.io/badge/Vite-6.x-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
@@ -15,21 +15,21 @@
 
 ## Sobre o Projeto
 
-O **VigiSaúde Brasil** é um dashboard de vigilância epidemiológica que monitora **Dengue**, **Chikungunya** e **Zika** em tempo real, correlacionando os dados de doenças com indicadores de **saneamento básico (esgoto)** por estado.
+O **VigiSaúde Brasil** é um dashboard de vigilância epidemiológica que monitora **Dengue**, **Chikungunya** e **Zika** em tempo real, correlacionando os dados de doenças com indicadores de **saneamento básico** por estado.
 
 O objetivo é visualizar a relação entre a cobertura de coleta e tratamento de esgoto e a incidência de doenças transmitidas por mosquitos no Brasil.
 
 ### Funcionalidades
 
-- **Mapa Interativo** — Mapa do Brasil colorido por nível de alerta epidemiológico, com dados de saneamento nos popups
-- **Rastreador de Doenças** — Gráficos de séries temporais para qualquer município brasileiro
-- **3 Patógenos** — Dengue, Chikungunya e Zika (via InfoDengue)
-- **Dados de Esgoto** — Cobertura de coleta e tratamento de esgoto por estado (SNIS)
-- **Correlação Esgoto x Doenças** — Gráfico de dispersão mostrando a relação entre saneamento e incidência
-- **Taxa Rt** — Monitoramento da taxa de reprodução com linha de referência Rt=1
-- **Dados Climáticos** — Temperatura e umidade associados à transmissão
-- **Busca de Municípios** — Pesquisa entre 5.570+ municípios do IBGE
-- **Dark Mode** — Interface premium com glassmorphism
+- **Mapa Interativo** - Mapa do Brasil colorido por nível de alerta epidemiológico, com dados de saneamento nos popups
+- **Rastreador de Doenças** - Gráficos de séries temporais para qualquer município brasileiro
+- **3 Patógenos** - Dengue, Chikungunya e Zika (via InfoDengue)
+- **Dados de Esgoto** - Cobertura de coleta e tratamento de esgoto por estado (SNIS)
+- **Correlação Esgoto x Doenças** - Gráfico de dispersão mostrando a relação entre saneamento e incidência
+- **Taxa Rt** - Monitoramento da taxa de reprodução com linha de referência Rt=1
+- **Dados Climáticos** - Temperatura e umidade associados à transmissão
+- **Busca de Municípios** - Pesquisa entre 5.570+ municípios do IBGE
+- **Dark Mode** - Interface premium com glassmorphism
 
 ---
 
