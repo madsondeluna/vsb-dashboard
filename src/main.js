@@ -4,7 +4,7 @@
  */
 import { fetchNationalOverview, fetchDiseaseData, getSanitationData, getDiseaseInfo, CHART_COLORS } from './services/api.js';
 import { initMap, loadGeoJSON, fitRegion, updateMapColors, setMapDisease, setMapLayer } from './components/map.js';
-import { renderAllCharts, renderMainChart, renderSanitationCorrelation } from './components/charts.js';
+import { renderCorrelationChart, renderSanitationCorrelation } from './components/charts.js';
 import { initCards, renderCards, updateNationalSummary, setActiveDisease } from './components/cards.js';
 import { initRegionFilters, initTrackerSelectors, initPeriodControls, getPeriod, initSearch, initPathogenTags, initChartToggle } from './components/filters.js';
 
@@ -184,8 +184,7 @@ function updateChartTitle() {
 
 // ===== Update Tracker Charts =====
 function updateTrackerCharts() {
-    const showRtLine = document.getElementById('show-rt-line')?.checked ?? true;
-    renderAllCharts(state.trackerDatasets, state.currentDisease, showRtLine);
+    renderCorrelationChart(state.trackerDatasets, state.currentDisease, new Date().getFullYear());
 }
 
 // ===== Reload Tracker Data (on disease or period change) =====
@@ -213,15 +212,6 @@ async function reloadTrackerData() {
 
 // ===== Init Tracker Toggle Listeners =====
 function initTrackerToggles() {
-    // Show Rt reference line toggle
-    document.getElementById('show-rt-line')?.addEventListener('change', () => {
-        updateTrackerCharts();
-    });
-
-    // Show national toggle
-    document.getElementById('show-national')?.addEventListener('change', () => {
-        updateTrackerCharts();
-    });
 
     // Period change listeners
     ['ew-start', 'ew-end', 'ey-start', 'ey-end'].forEach(id => {

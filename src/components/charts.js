@@ -43,8 +43,26 @@ function formatSEShort(se) {
     return `SE ${se % 100}`;
 }
 
-// ===== Main Chart: Cases over time =====
-export function renderMainChart(datasetsMap, disease = 'dengue', showNational = true) {
+// Helper to convert Epidemiological Week (1-52) to Month (0-11) approx
+function weekToMonth(week) {
+    if (week <= 4) return 0; // Jan
+    if (week <= 9) return 1; // Feb
+    if (week <= 13) return 2; // Mar
+    if (week <= 17) return 3; // Apr
+    if (week <= 22) return 4; // May
+    if (week <= 26) return 5; // Jun
+    if (week <= 30) return 6; // Jul
+    if (week <= 35) return 7; // Aug
+    if (week <= 39) return 8; // Sep
+    if (week <= 43) return 9; // Oct
+    if (week <= 48) return 10;// Nov
+    return 11;                // Dec
+}
+
+const MONTH_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+// ===== Unified Correlation Chart =====
+export function renderCorrelationChart(datasetsMap, disease = 'dengue', year = new Date().getFullYear()) {
     mainChart = destroyChart(mainChart);
 
     const canvas = document.getElementById('main-chart');
@@ -52,38 +70,115 @@ export function renderMainChart(datasetsMap, disease = 'dengue', showNational = 
 
     if (!datasetsMap || datasetsMap.size === 0) {
         canvas.classList.add('hidden');
-        emptyState.classList.remove('hidden');
+        if (emptyState) emptyState.classList.remove('hidden');
         return;
     }
 
     canvas.classList.remove('hidden');
-    emptyState.classList.add('hidden');
+    if (emptyState) emptyState.classList.add('hidden');
 
-    const diseaseInfo = getDiseaseInfo(disease);
+    const sanitationData = getSanitationData();
     const datasets = [];
-    let labels = [];
     let colorIdx = 0;
 
     for (const [locationName, data] of datasetsMap) {
         if (data.length === 0) continue;
 
-        if (labels.length === 0) {
-            labels = data.map(d => formatSEShort(d.SE));
+        // Base color for this city
+        const color = CHART_COLORS[colorIdx % CHART_COLORS.length];
+
+        // 1. Aggregate Data by Month
+        const monthlyData = Array.from({ length: 12 }, () => ({
+            casos: 0,
+            tempSum: 0, tempCount: 0,
+            umidSum: 0, umidCount: 0
+        }));
+
+        data.forEach(d => {
+            const m = weekToMonth(d.SE % 100);
+            monthlyData[m].casos += (d.casos || 0);
+            if (d.tempmed !== null && d.tempmed !== undefined) { monthlyData[m].tempSum += d.tempmed; monthlyData[m].tempCount++; }
+            if (d.umidmed !== null && d.umidmed !== undefined) { monthlyData[m].umidSum += d.umidmed; monthlyData[m].umidCount++; }
+        });
+
+        const casosArray = monthlyData.map(m => m.casos);
+        const tempArray = monthlyData.map(m => m.tempCount > 0 ? (m.tempSum / m.tempCount) : null);
+        const umidArray = monthlyData.map(m => m.umidCount > 0 ? (m.umidSum / m.umidCount) : null);
+
+        // 2. Add Cases (Bar) - primary Y axis
+        datasets.push({
+            label: `${locationName} - Casos`,
+            data: casosArray,
+            backgroundColor: color + '99',
+            borderColor: color,
+            borderWidth: 1,
+            borderRadius: 4,
+            type: 'bar',
+            yAxisID: 'y',
+            order: 3
+        });
+
+        // 3. Add Climate (Lines) - secondary Y axis
+        datasets.push({
+            label: `${locationName} - Umidade Média (%)`,
+            data: umidArray,
+            borderColor: '#38bdf8', // Blue for humidity
+            backgroundColor: 'transparent',
+            tension: 0.4,
+            pointRadius: 2,
+            borderWidth: 2,
+            borderDash: [5, 5],
+            type: 'line',
+            yAxisID: 'y1',
+            spanGaps: true,
+            order: 2
+        });
+
+        datasets.push({
+            label: `${locationName} - Temp. Média (°C)`,
+            data: tempArray,
+            borderColor: '#f59e0b', // Amber for temp
+            backgroundColor: 'transparent',
+            tension: 0.4,
+            pointRadius: 2,
+            borderWidth: 2,
+            type: 'line',
+            yAxisID: 'y1',
+            spanGaps: true,
+            order: 2
+        });
+
+        // 4. Add Sanitation Reference Lines (Constant) - secondary Y axis
+        const parts = locationName.split(' - ');
+        if (parts.length > 1) {
+            const uf = parts[1].trim();
+            const san = sanitationData[uf];
+            if (san) {
+                datasets.push({
+                    label: `${locationName} - Coleta de Esgoto (%)`,
+                    data: new Array(12).fill(san.coletaEsgoto),
+                    borderColor: '#22c55e', // Green for collection
+                    borderWidth: 1.5,
+                    borderDash: [2, 2],
+                    pointRadius: 0,
+                    type: 'line',
+                    yAxisID: 'y1',
+                    order: 1
+                });
+                datasets.push({
+                    label: `${locationName} - Trat. Esgoto (%)`,
+                    data: new Array(12).fill(san.tratamentoEsgoto),
+                    borderColor: '#06b6d4', // Cyan for treatment
+                    borderWidth: 1.5,
+                    borderDash: [4, 4],
+                    pointRadius: 0,
+                    type: 'line',
+                    yAxisID: 'y1',
+                    order: 1
+                });
+            }
         }
 
-        const color = CHART_COLORS[colorIdx % CHART_COLORS.length];
-        datasets.push({
-            label: locationName,
-            data: data.map(d => d.casos || 0),
-            borderColor: color,
-            backgroundColor: color + '18',
-            fill: datasets.length === 0,
-            tension: 0.35,
-            pointRadius: 3,
-            pointHoverRadius: 6,
-            pointBackgroundColor: color,
-            borderWidth: 2.5,
-        });
         colorIdx++;
     }
 
@@ -92,246 +187,51 @@ export function renderMainChart(datasetsMap, disease = 'dengue', showNational = 
     const ctx = canvas.getContext('2d');
 
     mainChart = new Chart(ctx, {
-        type: 'line',
-        data: { labels, datasets },
+        type: 'bar',
+        data: { labels: MONTH_LABELS, datasets },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            interaction: {
-                mode: 'index',
-                intersect: false,
-            },
+            interaction: { mode: 'index', intersect: false },
             plugins: {
-                legend: {
-                    position: 'top',
-                    align: 'start',
-                },
+                legend: { position: 'top', align: 'start', labels: { boxWidth: 12, font: { size: 11 } } },
                 tooltip: {
                     callbacks: {
-                        title: (items) => `Semana Epidemiológica ${items[0].label}`,
-                        label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString('pt-BR')} casos`,
-                    },
-                },
+                        label: (ctx) => {
+                            let label = ctx.dataset.label || '';
+                            let value = ctx.parsed.y;
+                            if (label.includes('Casos')) return `${label}: ${Math.round(value).toLocaleString('pt-BR')}`;
+                            if (label.includes('Umidade') || label.includes('Esgoto')) return `${label}: ${value.toFixed(1)}%`;
+                            if (label.includes('Temp')) return `${label}: ${value.toFixed(1)}°C`;
+                            return `${label}: ${value}`;
+                        }
+                    }
+                }
             },
             scales: {
                 x: {
                     grid: { display: false },
-                    ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 },
                 },
                 y: {
-                    grid: { color: 'rgba(148, 163, 184, 0.08)' },
-                    ticks: {
-                        callback: (v) => v.toLocaleString('pt-BR'),
-                    },
-                    title: {
-                        display: true,
-                        text: 'Número de Casos',
-                        font: { size: 11, weight: '500' },
-                    },
-                },
-            },
-        },
-    });
-}
-
-// ===== Rt Chart =====
-export function renderRtChart(datasetsMap, showRtLine = true) {
-    rtChart = destroyChart(rtChart);
-    const canvas = document.getElementById('rt-chart');
-    if (!datasetsMap || datasetsMap.size === 0) return;
-
-    const datasets = [];
-    let labels = [];
-    let colorIdx = 0;
-
-    for (const [locationName, data] of datasetsMap) {
-        if (data.length === 0) continue;
-        if (labels.length === 0) labels = data.map(d => formatSEShort(d.SE));
-
-        const color = CHART_COLORS[colorIdx % CHART_COLORS.length];
-        datasets.push({
-            label: locationName,
-            data: data.map(d => d.Rt || null),
-            borderColor: color,
-            backgroundColor: 'transparent',
-            tension: 0.35,
-            pointRadius: 2,
-            pointHoverRadius: 5,
-            borderWidth: 2,
-            spanGaps: true,
-        });
-        colorIdx++;
-    }
-
-    // Reference line at Rt = 1
-    if (showRtLine) {
-        datasets.push({
-            label: 'Rt = 1 (referência)',
-            data: new Array(labels.length).fill(1),
-            borderColor: 'rgba(239, 68, 68, 0.5)',
-            borderDash: [6, 4],
-            borderWidth: 1.5,
-            pointRadius: 0,
-            fill: false,
-        });
-    }
-
-    const ctx = canvas.getContext('2d');
-    rtChart = new Chart(ctx, {
-        type: 'line',
-        data: { labels, datasets },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        label: (ctx) => {
-                            if (ctx.dataset.label.startsWith('Rt =')) return ctx.dataset.label;
-                            return `${ctx.dataset.label}: Rt = ${ctx.parsed.y?.toFixed(3) || '--'}`;
-                        },
-                    },
-                },
-            },
-            scales: {
-                x: { grid: { display: false }, ticks: { maxTicksLimit: 6, maxRotation: 0 } },
-                y: {
-                    grid: { color: 'rgba(148, 163, 184, 0.08)' },
-                    title: { display: true, text: 'Rt', font: { size: 11 } },
-                },
-            },
-        },
-    });
-}
-
-// ===== Incidence Chart =====
-export function renderIncidenceChart(datasetsMap) {
-    incidenceChart = destroyChart(incidenceChart);
-    const canvas = document.getElementById('incidence-chart');
-    if (!datasetsMap || datasetsMap.size === 0) return;
-
-    const datasets = [];
-    let labels = [];
-    let colorIdx = 0;
-
-    for (const [locationName, data] of datasetsMap) {
-        if (data.length === 0) continue;
-        if (labels.length === 0) labels = data.map(d => formatSEShort(d.SE));
-
-        const color = CHART_COLORS[colorIdx % CHART_COLORS.length];
-        datasets.push({
-            label: locationName,
-            data: data.map(d => d.p_inc100k || 0),
-            backgroundColor: color + '80',
-            borderColor: color,
-            borderWidth: 1,
-            borderRadius: 3,
-        });
-        colorIdx++;
-    }
-
-    const ctx = canvas.getContext('2d');
-    incidenceChart = new Chart(ctx, {
-        type: 'bar',
-        data: { labels, datasets },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(1)} por 100k`,
-                    },
-                },
-            },
-            scales: {
-                x: { grid: { display: false }, ticks: { maxTicksLimit: 6, maxRotation: 0 } },
-                y: {
-                    grid: { color: 'rgba(148, 163, 184, 0.08)' },
-                    title: { display: true, text: 'Inc/100k hab', font: { size: 11 } },
-                },
-            },
-        },
-    });
-}
-
-// ===== Climate Chart (Temp + Humidity) =====
-export function renderClimateChart(datasetsMap) {
-    climateChart = destroyChart(climateChart);
-    const canvas = document.getElementById('climate-chart');
-    if (!datasetsMap || datasetsMap.size === 0) return;
-
-    // Use first dataset only for climate
-    const firstEntry = datasetsMap.entries().next().value;
-    if (!firstEntry) return;
-
-    const [locationName, data] = firstEntry;
-    if (data.length === 0) return;
-
-    const labels = data.map(d => formatSEShort(d.SE));
-
-    const ctx = canvas.getContext('2d');
-    climateChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels,
-            datasets: [
-                {
-                    label: 'Temp. Média (°C)',
-                    data: data.map(d => d.tempmed || null),
-                    borderColor: '#f59e0b',
-                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                    fill: true,
-                    tension: 0.35,
-                    pointRadius: 2,
-                    borderWidth: 2,
-                    yAxisID: 'y',
-                    spanGaps: true,
-                },
-                {
-                    label: 'Umidade Média (%)',
-                    data: data.map(d => d.umidmed || null),
-                    borderColor: '#38bdf8',
-                    backgroundColor: 'transparent',
-                    tension: 0.35,
-                    pointRadius: 2,
-                    borderWidth: 2,
-                    yAxisID: 'y1',
-                    spanGaps: true,
-                },
-            ],
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: true, position: 'top', labels: { boxWidth: 8, font: { size: 10 } } },
-            },
-            scales: {
-                x: { grid: { display: false }, ticks: { maxTicksLimit: 6, maxRotation: 0 } },
-                y: {
+                    type: 'linear',
+                    display: true,
                     position: 'left',
                     grid: { color: 'rgba(148, 163, 184, 0.08)' },
-                    title: { display: true, text: '°C', font: { size: 10 } },
+                    title: { display: true, text: 'Número de Casos Mensais', font: { size: 11, weight: '500' } },
+                    ticks: { callback: (v) => v.toLocaleString('pt-BR') },
                 },
                 y1: {
+                    type: 'linear',
+                    display: true,
                     position: 'right',
-                    grid: { display: false },
-                    title: { display: true, text: '%', font: { size: 10 } },
+                    grid: { drawOnChartArea: false },
+                    title: { display: true, text: 'Valores Secundários (%, °C)', font: { size: 11, weight: '500' } },
+                    min: 0,
+                    max: 100,
                 },
             },
         },
     });
-}
-
-// ===== Render All Tracker Charts =====
-export function renderAllCharts(datasetsMap, disease = 'dengue', showRtLine = true) {
-    renderMainChart(datasetsMap, disease);
-    renderRtChart(datasetsMap, showRtLine);
-    renderIncidenceChart(datasetsMap);
-    renderClimateChart(datasetsMap);
 }
 
 // ===== Sanitation Correlation Chart (for info/special view) =====
