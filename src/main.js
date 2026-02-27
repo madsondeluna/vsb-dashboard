@@ -3,7 +3,7 @@
  * Orchestrates all components and views
  */
 import { fetchNationalOverview, fetchDiseaseData, getSanitationData, getDiseaseInfo, CHART_COLORS } from './services/api.js';
-import { initMap, loadGeoJSON, fitRegion, updateMapColors, setMapDisease, setMapLayer } from './components/map.js';
+import { initMap, loadGeoJSON, fitRegion, updateMapColors, setMapDisease, setMapLayer, setMapHeatmap, setMapEsgotoRelevo } from './components/map.js';
 import { renderCorrelationChart, renderSanitationCorrelation } from './components/charts.js';
 import { initCards, renderCards, updateNationalSummary, setActiveDisease } from './components/cards.js';
 import { initRegionFilters, initTrackerSelectors, initPeriodControls, getPeriod, initSearch, initPathogenTags, initChartToggle } from './components/filters.js';
@@ -13,6 +13,7 @@ const state = {
     currentView: 'map',
     currentDisease: 'dengue',
     nationalData: {},     // { disease: [capitalData] }
+    allDiseaseData: {},   // { dengue, chikungunya, zika } — all 3 for heatmap
     trackerLocations: [], // [{ geocode, name, data }]
     trackerDatasets: new Map(),
 };
@@ -52,11 +53,11 @@ function initNavigation() {
 // ===== Load National Data for Map View =====
 async function loadNationalData(disease = 'dengue') {
     try {
-        // Fetch data for the active disease (for map, charts, summary)
+        // Fetch data for the active disease (for map, cards, summary)
         const data = await fetchNationalOverview(disease);
         state.nationalData[disease] = data;
 
-        // Also fetch the other two diseases in background for cards
+        // Also fetch the other two diseases in background for cards + heatmap
         const allDiseases = ['dengue', 'chikungunya', 'zika'];
         const otherDiseases = allDiseases.filter(d => d !== disease);
         const otherResults = await Promise.allSettled(
@@ -68,7 +69,6 @@ async function loadNationalData(disease = 'dengue') {
             })
         );
 
-        // Build diseaseDataMap for cards
         const diseaseDataMap = { [disease]: data };
         otherResults.forEach(r => {
             if (r.status === 'fulfilled') {
@@ -83,8 +83,16 @@ async function loadNationalData(disease = 'dengue') {
         // Update national summary (active disease)
         updateNationalSummary(data);
 
-        // Update map colors
+        // Update map colors — pass all disease data so heatmap has it ready
         await loadGeoJSON(data);
+        // Store all data for heatmap use
+        state.allDiseaseData = diseaseDataMap;
+
+        // If currently in heatmap mode, refresh heatmap with new data
+        const activeLayerBtn = document.querySelector('.layer-btn.active');
+        if (activeLayerBtn?.dataset.layer === 'heatmap') {
+            setMapHeatmap(diseaseDataMap);
+        }
 
         // Update last update date
         const lastUpdateEl = document.getElementById('last-update');
@@ -263,11 +271,19 @@ async function init() {
         btn.addEventListener('click', (e) => {
             // Update active styling
             layerBtns.forEach(b => b.classList.remove('active'));
-            e.target.classList.add('active');
+            e.currentTarget.classList.add('active');
 
-            // Set map layer
-            const layer = e.target.dataset.layer;
-            setMapLayer(layer);
+            const layer = e.currentTarget.dataset.layer;
+
+            if (layer === 'heatmap') {
+                // Pass all collected disease data to the heatmap renderer
+                const allData = state.allDiseaseData || state.nationalData;
+                setMapHeatmap(allData);
+            } else if (layer === 'esgotoRelevo') {
+                setMapEsgotoRelevo();
+            } else {
+                setMapLayer(layer);
+            }
         });
     });
 

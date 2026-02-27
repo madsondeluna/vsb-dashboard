@@ -103,7 +103,22 @@
                 <div class="sidebar__section">
                     <h3 class="sidebar__section-title">Camada do Mapa</h3>
                     <div class="map-layer-toggles" id="map-layer-toggles">
-                        <button class="layer-btn active" data-layer="disease">Doenças</button>
+                        <button class="layer-btn active" data-layer="disease">Doença Única</button>
+                        <button class="layer-btn" data-layer="heatmap">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                height="12" style="margin-right:4px;vertical-align:-1px">
+                                <circle cx="12" cy="12" r="10" />
+                                <path d="M12 8v4l3 3" />
+                            </svg>
+                            Heatmap 3 Doenças
+                        </button>
+                        <button class="layer-btn" data-layer="esgotoRelevo">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12"
+                                height="12" style="margin-right:4px;vertical-align:-1px">
+                                <path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0L12 2.69z" />
+                            </svg>
+                            Esgoto — Relevo
+                        </button>
                         <button class="layer-btn" data-layer="coletaEsgoto">Coleta de Esgoto</button>
                         <button class="layer-btn" data-layer="tratamentoEsgoto">Trat. de Esgoto</button>
                     </div>
