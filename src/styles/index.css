@@ -328,20 +328,24 @@ body {
   top: 0;
   bottom: 0;
   width: 3px;
-  background: var(--card-accent);
+  background: var(--surface-3);
   border-radius: 3px 0 0 3px;
   transition: var(--transition-base);
 }
 
 .disease-card:hover {
   background: var(--bg-hover);
-  border-color: var(--card-accent);
+  border-color: var(--border-strong);
   transform: translateX(4px);
 }
 
 .disease-card.active {
   background: var(--bg-hover);
-  border-color: var(--card-accent);
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
+.disease-card.active::before {
+  background: var(--text-secondary);
 }
 
 .disease-card__header {
