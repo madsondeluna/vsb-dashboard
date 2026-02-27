@@ -1,13 +1,8 @@
-# VigiSaúde Brasil - — Dashboard de Vigilância
+# VigiSaúde Brasil - Dashboard de Vigilância
 
 <div align="center">
 
 **Dashboard interativo para monitoramento de doenças infecciosas no Brasil, com correlação de dados de saneamento.**
-
-[![JavaScript](https://img.shields.io/badge/JavaScript-ES2022-F7DF1E?logo=javascript&logoColor=black)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
-[![Vite](https://img.shields.io/badge/Vite-6.x-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
-[![Leaflet](https://img.shields.io/badge/Leaflet-1.9-199900?logo=leaflet&logoColor=white)](https://leafletjs.com/)
-[![Chart.js](https://img.shields.io/badge/Chart.js-4.x-FF6384?logo=chartdotjs&logoColor=white)](https://www.chartjs.org/)
 
 </div>
 
