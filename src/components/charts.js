@@ -98,8 +98,8 @@ export function renderCorrelationChart(datasetsMap, disease = 'dengue', year = n
         data.forEach(d => {
             const m = weekToMonth(d.SE % 100);
             monthlyData[m].casos += (d.casos || 0);
-            if (d.tempmed !== null && d.tempmed !== undefined) { monthlyData[m].tempSum += d.tempmed; monthlyData[m].tempCount++; }
-            if (d.umidmed !== null && d.umidmed !== undefined) { monthlyData[m].umidSum += d.umidmed; monthlyData[m].umidCount++; }
+            if (d.tempmed > 0) { monthlyData[m].tempSum += d.tempmed; monthlyData[m].tempCount++; }
+            if (d.umidmed > 0) { monthlyData[m].umidSum += d.umidmed; monthlyData[m].umidCount++; }
         });
 
         const casosArray = monthlyData.map(m => m.casos);
@@ -206,10 +206,9 @@ export function renderCorrelationChart(datasetsMap, disease = 'dengue', year = n
                     position: 'right',
                     grid: { drawOnChartArea: false },
                     title: { display: true, text: 'Temperatura (°C)', font: { size: 11, weight: '500' } },
-                    min: 0,
-                    max: 45,
+                    min: 15,
+                    max: 42,
                     ticks: { callback: v => `${v}°C` },
-                    offset: true,
                 },
             },
         },
