@@ -169,10 +169,8 @@
             <aside class="sidebar" id="sidebar-tracker">
                 <header class="sidebar__header">
                     <h1 class="sidebar__title">Rastreador</h1>
-                    <p class="sidebar__subtitle">Análise detalhada por localidade</p>
+                    <p class="sidebar__subtitle">Perfil epidemiológico por localidade</p>
                 </header>
-
-
 
                 <div class="sidebar__section">
                     <h3 class="sidebar__section-title">Patógeno</h3>
@@ -184,13 +182,7 @@
                 </div>
 
                 <div class="sidebar__section">
-                    <h3 class="sidebar__section-title">Tipo</h3>
-                    <p class="sidebar__type-display" id="tracker-disease-type">Dengue</p>
-                </div>
-
-                <div class="sidebar__section">
-                    <h3 class="sidebar__section-title">Localidade(s) <span class="loc-count" id="loc-count">0
-                            selecionadas</span></h3>
+                    <h3 class="sidebar__section-title">Localidade</h3>
                     <div class="location-selector">
                         <div class="select-wrapper">
                             <select id="tracker-state" class="custom-select">
@@ -203,49 +195,40 @@
                             </select>
                         </div>
                         <button id="add-location-btn" class="btn btn--primary btn--sm" disabled>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16"
-                                height="16">
-                                <line x1="12" y1="5" x2="12" y2="19" />
-                                <line x1="5" y1="12" x2="19" y2="12" />
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                             </svg>
-                            Adicionar
+                            Analisar
                         </button>
                     </div>
-                    <div id="selected-locations" class="selected-locations"></div>
                 </div>
 
-
                 <div class="sidebar__section">
-                    <h3 class="sidebar__section-title">Período</h3>
-                    <div class="period-controls">
-                        <div class="period-row">
-                            <label>Início</label>
-                            <div class="period-inputs">
-                                <select id="ew-start" class="custom-select custom-select--sm"></select>
-                                <select id="ey-start" class="custom-select custom-select--sm"></select>
-                            </div>
-                        </div>
-                        <div class="period-row">
-                            <label>Fim</label>
-                            <div class="period-inputs">
-                                <select id="ew-end" class="custom-select custom-select--sm"></select>
-                                <select id="ey-end" class="custom-select custom-select--sm"></select>
-                            </div>
-                        </div>
+                    <h3 class="sidebar__section-title">Opções</h3>
+                    <label class="compare-toggle">
+                        <input type="checkbox" id="compare-prev-year" />
+                        Comparar com ano anterior
+                    </label>
+                </div>
+
+                <!-- City info card (populated by JS) -->
+                <div class="sidebar__section" id="city-info-section" style="display:none;">
+                    <h3 class="sidebar__section-title">Localidade Selecionada</h3>
+                    <div id="city-info-card" style="background:var(--bg-tertiary);border-radius:var(--radius-md);padding:12px;font-size:0.8rem;">
                     </div>
                 </div>
             </aside>
 
-            <!-- Charts Area -->
+            <!-- Profile Area -->
             <main class="main-content">
                 <div class="main-content__header">
                     <div class="chart-title-area">
-                        <h2 id="chart-main-title" class="chart-title">Dengue — Selecione uma localidade</h2>
+                        <h2 id="chart-main-title" class="chart-title">Selecione um município</h2>
                     </div>
                     <div class="main-header-actions">
+                        <span id="tracker-year-badge" style="font-size:0.75rem;color:var(--text-tertiary);padding:4px 10px;background:var(--bg-tertiary);border-radius:20px;display:none;"></span>
                         <button class="btn btn--outline btn--sm" id="btn-share">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16"
-                                height="16">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                                 <path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8" />
                                 <polyline points="16 6 12 2 8 6" />
                                 <line x1="12" y1="2" x2="12" y2="15" />
@@ -255,48 +238,82 @@
                     </div>
                 </div>
 
-                <div class="charts-area">
-                    <!-- Main Chart: Casos + Clima -->
-                    <div class="chart-panel chart-panel--main" id="main-chart-panel">
-                        <div class="chart-panel__empty" id="chart-empty-state">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64"
-                                height="64">
-                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                            </svg>
-                            <h3>Selecione uma localidade</h3>
-                            <p>Escolha um estado e município na barra lateral para visualizar os dados epidemiológicos.
-                            </p>
+                <!-- Empty state -->
+                <div class="chart-panel chart-panel--main" id="tracker-empty-state">
+                    <div class="chart-panel__empty">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="64" height="64">
+                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+                            <circle cx="12" cy="9" r="2.5"/>
+                        </svg>
+                        <h3>Selecione um município</h3>
+                        <p>Escolha um estado e município na barra lateral, depois clique em <strong>Analisar</strong> para ver o perfil epidemiológico completo.</p>
+                    </div>
+                </div>
+
+                <!-- Loading state -->
+                <div id="tracker-loading" class="city-loading hidden">
+                    <div class="loader"></div>
+                    <span>Carregando dados epidemiológicos...</span>
+                </div>
+
+                <!-- Profile content -->
+                <div id="tracker-profile" class="hidden">
+                    <!-- KPI Cards -->
+                    <div class="kpi-row" id="kpi-row">
+                        <div class="kpi-card" id="kpi-alert" style="--kpi-accent: #4fa880;">
+                            <div class="kpi-label">Nível de Alerta</div>
+                            <div class="kpi-value" id="kpi-alert-value">--</div>
+                            <div class="kpi-sub" id="kpi-alert-sub">última SE</div>
                         </div>
-                        <canvas id="main-chart" class="hidden"></canvas>
+                        <div class="kpi-card" id="kpi-rt" style="--kpi-accent: #6baed6;">
+                            <div class="kpi-label">Rt (última SE)</div>
+                            <div class="kpi-value" id="kpi-rt-value">--</div>
+                            <div class="kpi-sub" id="kpi-rt-sub">--</div>
+                        </div>
+                        <div class="kpi-card" id="kpi-cases" style="--kpi-accent: #c89828;">
+                            <div class="kpi-label">Casos Estimados</div>
+                            <div class="kpi-value" id="kpi-cases-value">--</div>
+                            <div class="kpi-sub" id="kpi-cases-sub">última SE</div>
+                        </div>
+                        <div class="kpi-card" id="kpi-inc" style="--kpi-accent: #74c496;">
+                            <div class="kpi-label">Incidência/100k</div>
+                            <div class="kpi-value" id="kpi-inc-value">--</div>
+                            <div class="kpi-sub" id="kpi-inc-sub">--</div>
+                        </div>
                     </div>
 
-                    <!-- Rt Chart: Número de Reprodução Semanal -->
-                    <div class="chart-panel hidden" id="rt-chart-panel" style="margin-top: 12px;">
-                        <div style="padding: 14px 16px 6px; border-bottom: 1px solid rgba(148,163,184,0.1);">
-                            <h3 style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary); margin: 0 0 2px;">
-                                Número de Reprodução — Rt Semanal
-                            </h3>
-                            <p style="font-size: 0.72rem; color: var(--text-tertiary); margin: 0;">
-                                Rt &gt; 1 = epidemia em crescimento &nbsp;·&nbsp; Rt &lt; 1 = epidemia controlada. Limiar crítico em vermelho tracejado.
-                            </p>
+                    <div class="tracker-charts">
+                        <!-- Curva Epidêmica -->
+                        <div class="chart-panel">
+                            <div class="chart-panel__header">
+                                <h3>Curva Epidêmica — Casos por Semana Epidemiológica</h3>
+                                <p>Casos notificados por SE. Linha pontilhada = ano anterior (quando ativado).</p>
+                            </div>
+                            <div style="height:240px;position:relative;padding:8px;">
+                                <canvas id="epidemic-curve-chart"></canvas>
+                            </div>
                         </div>
-                        <div style="height: 200px; position: relative; padding: 8px;">
-                            <canvas id="rt-chart"></canvas>
-                        </div>
-                    </div>
 
-                    <!-- Sanitation Chart: Saneamento × Incidência -->
-                    <div class="chart-panel hidden" id="sanitation-chart-panel" style="margin-top: 12px;">
-                        <div style="padding: 14px 16px 6px; border-bottom: 1px solid rgba(148,163,184,0.1);">
-                            <h3 style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary); margin: 0 0 2px;">
-                                Saneamento × Incidência
-                            </h3>
-                            <p style="font-size: 0.72rem; color: var(--text-tertiary); margin: 0;">
-                                Coleta e tratamento de esgoto (SNIS 2022/23) comparados à incidência média da doença selecionada
-                            </p>
+                        <!-- Rt Semanal -->
+                        <div class="chart-panel" id="rt-chart-panel">
+                            <div class="chart-panel__header">
+                                <h3>Número de Reprodução — Rt Semanal</h3>
+                                <p>Rt &gt; 1 = epidemia em crescimento · Rt &lt; 1 = epidemia controlada. Limiar em vermelho tracejado.</p>
+                            </div>
+                            <div style="height:200px;position:relative;padding:8px;">
+                                <canvas id="rt-chart"></canvas>
+                            </div>
                         </div>
-                        <div style="height: 220px; position: relative; padding: 8px;">
-                            <canvas id="sanitation-chart"></canvas>
+
+                        <!-- Clima Semanal -->
+                        <div class="chart-panel hidden" id="climate-chart-panel">
+                            <div class="chart-panel__header">
+                                <h3>Fatores Climáticos — Temperatura e Umidade</h3>
+                                <p>Temperatura média (°C) e umidade relativa do ar (%) por semana epidemiológica.</p>
+                            </div>
+                            <div style="height:200px;position:relative;padding:8px;">
+                                <canvas id="climate-chart"></canvas>
+                            </div>
                         </div>
                     </div>
                 </div>

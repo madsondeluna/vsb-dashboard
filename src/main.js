@@ -2,36 +2,31 @@
  * VigiSaúde Brasil — Main Entry Point
  * Orchestrates all components and views
  */
-import { fetchNationalOverview, fetchDiseaseData, getSanitationData, getDiseaseInfo, CHART_COLORS, getAlertColorHex } from './services/api.js';
+import { fetchNationalOverview, fetchDiseaseData, getSanitationData, getDiseaseInfo, CHART_COLORS, getAlertColorHex, getAlertLevel } from './services/api.js';
 import { initMap, loadGeoJSON, fitRegion, updateMapColors, setMapDisease, setMapLayer } from './components/map.js';
-import { renderCorrelationChart, renderSanitationCorrelation, renderSanitationComparison, renderRtChart } from './components/charts.js';
+import { renderSanitationCorrelation, renderRtChart, renderEpidemicCurve, renderClimateChart } from './components/charts.js';
 import { initCards, renderCards, updateNationalSummary, setActiveDisease } from './components/cards.js';
-import { initRegionFilters, initTrackerSelectors, initPeriodControls, getPeriod, initSearch, initPathogenTags, initChartToggle } from './components/filters.js';
+import { initRegionFilters, initTrackerSelectors, initSearch, initPathogenTags } from './components/filters.js';
 
 // ===== App State =====
 const state = {
     currentView: 'map',
     currentDisease: 'dengue',
-    nationalData: {},     // { disease: [capitalData] }
-    trackerLocations: [], // [{ geocode, name, data }]
-    trackerDatasets: new Map(),
+    nationalData: {},   // { disease: [capitalData] }
+    currentCity: null,  // { geocode, name, data, prevYearData }
 };
 
 // ===== View Navigation =====
 function switchView(viewId) {
     state.currentView = viewId;
 
-    // Update nav buttons
     document.querySelectorAll('.icon-nav__btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.view === viewId);
     });
-
-    // Update view sections
     document.querySelectorAll('.view').forEach(view => {
         view.classList.toggle('view--active', view.id === `view-${viewId}`);
     });
 
-    // Trigger map resize if switching to map
     if (viewId === 'map') {
         setTimeout(() => {
             import('./components/map.js').then(m => {
@@ -41,7 +36,6 @@ function switchView(viewId) {
         }, 100);
     }
 
-    // Refresh sanitation scatter when switching to info view
     if (viewId === 'info') {
         const data = state.nationalData[state.currentDisease];
         if (data && data.length > 0) {
@@ -60,11 +54,9 @@ function initNavigation() {
 // ===== Load National Data for Map View =====
 async function loadNationalData(disease = 'dengue') {
     try {
-        // Fetch data for the active disease (for map, cards, summary)
         const data = await fetchNationalOverview(disease);
         state.nationalData[disease] = data;
 
-        // Also fetch the other two diseases in background for cards + heatmap
         const allDiseases = ['dengue', 'chikungunya', 'zika'];
         const otherDiseases = allDiseases.filter(d => d !== disease);
         const otherResults = await Promise.allSettled(
@@ -78,122 +70,28 @@ async function loadNationalData(disease = 'dengue') {
 
         const diseaseDataMap = { [disease]: data };
         otherResults.forEach(r => {
-            if (r.status === 'fulfilled') {
-                diseaseDataMap[r.value.disease] = r.value.data;
-            }
+            if (r.status === 'fulfilled') diseaseDataMap[r.value.disease] = r.value.data;
         });
 
-        // Update disease cards with per-disease data
         const cardsContainer = document.getElementById('disease-cards');
         renderCards(cardsContainer, diseaseDataMap);
-
-        // Update national summary (active disease)
         updateNationalSummary(data);
         renderHotspots(data, disease);
 
         await loadGeoJSON(data);
 
-        // Update last update date
         const lastUpdateEl = document.getElementById('last-update');
         if (lastUpdateEl) {
             const now = new Date();
             lastUpdateEl.textContent = `Atualizado: ${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
         }
 
-        // Render sanitation correlation if the Info view is active
         if (state.currentView === 'info' && document.getElementById('sanitation-correlation')) {
             renderSanitationCorrelation('sanitation-correlation', data, disease);
         }
-
     } catch (err) {
         console.error('Erro ao carregar dados nacionais:', err);
     }
-}
-
-// ===== Tracker: Add Location =====
-async function addTrackerLocation(geocode, name) {
-    // Check if already added
-    if (state.trackerLocations.find(l => l.geocode === geocode)) return;
-
-    const period = getPeriod();
-
-    try {
-        const data = await fetchDiseaseData(geocode, state.currentDisease, period.ewStart, period.ewEnd, period.eyStart, period.eyEnd);
-        const location = { geocode, name, data };
-        state.trackerLocations.push(location);
-
-        // Update datasets map
-        state.trackerDatasets.set(name, data);
-
-        // Update UI
-        renderTrackerLocations();
-        updateTrackerCharts();
-        updateChartTitle();
-
-    } catch (err) {
-        console.error(`Erro ao carregar dados de ${name}:`, err);
-    }
-}
-
-// ===== Tracker: Remove Location =====
-function removeTrackerLocation(geocode) {
-    const idx = state.trackerLocations.findIndex(l => l.geocode === geocode);
-    if (idx === -1) return;
-
-    const name = state.trackerLocations[idx].name;
-    state.trackerLocations.splice(idx, 1);
-    state.trackerDatasets.delete(name);
-
-    renderTrackerLocations();
-    updateTrackerCharts();
-    updateChartTitle();
-}
-
-// ===== Render Selected Locations in Sidebar =====
-function renderTrackerLocations() {
-    const container = document.getElementById('selected-locations');
-    const countEl = document.getElementById('loc-count');
-
-    if (countEl) {
-        countEl.textContent = `${state.trackerLocations.length} selecionada${state.trackerLocations.length !== 1 ? 's' : ''}`;
-    }
-
-    container.innerHTML = state.trackerLocations.map((loc, idx) => {
-        const color = CHART_COLORS[idx % CHART_COLORS.length];
-        return `
-      <div class="selected-location">
-        <span class="selected-location__color" style="background: ${color}"></span>
-        <span class="selected-location__name">${loc.name}</span>
-        <button class="selected-location__remove" data-geocode="${loc.geocode}" title="Remover">✕</button>
-      </div>
-    `;
-    }).join('');
-
-    // Remove button handlers
-    container.querySelectorAll('.selected-location__remove').forEach(btn => {
-        btn.addEventListener('click', () => removeTrackerLocation(btn.dataset.geocode));
-    });
-}
-
-// ===== Update Chart Title =====
-function updateChartTitle() {
-    const titleEl = document.getElementById('chart-main-title');
-    const info = getDiseaseInfo(state.currentDisease);
-
-    if (state.trackerLocations.length === 0) {
-        titleEl.textContent = `${info.name} — Selecione uma localidade`;
-    } else if (state.trackerLocations.length === 1) {
-        titleEl.textContent = `${info.name} — ${state.trackerLocations[0].name}`;
-    } else {
-        titleEl.textContent = `${info.name} — ${state.trackerLocations.length} localidades`;
-    }
-}
-
-// ===== Update Tracker Charts =====
-function updateTrackerCharts() {
-    renderCorrelationChart(state.trackerDatasets, state.currentDisease, new Date().getFullYear());
-    renderRtChart(state.trackerDatasets, state.currentDisease);
-    renderSanitationComparison('sanitation-chart', state.trackerDatasets, state.currentDisease);
 }
 
 // ===== Render Top Hotspots in Map Sidebar =====
@@ -237,93 +135,166 @@ function renderHotspots(data, disease) {
     }).join('');
 }
 
-// ===== Reload Tracker Data (on disease or period change) =====
-async function reloadTrackerData() {
-    if (state.trackerLocations.length === 0) return;
+// ===== Tracker: Update KPI Cards =====
+function updateKpiCards(data) {
+    if (!data || data.length === 0) return;
+    const latest = data[data.length - 1];
 
-    const period = getPeriod();
-    state.trackerDatasets.clear();
+    // Alert level
+    const alertInfo = getAlertLevel(latest.nivel || 1);
+    const alertColor = getAlertColorHex(latest.nivel || 1);
+    const kpiAlert = document.getElementById('kpi-alert');
+    if (kpiAlert) kpiAlert.style.setProperty('--kpi-accent', alertColor);
+    const alertVal = document.getElementById('kpi-alert-value');
+    if (alertVal) alertVal.textContent = `Nível ${latest.nivel || 1}`;
+    const alertSub = document.getElementById('kpi-alert-sub');
+    if (alertSub) alertSub.textContent = alertInfo.label;
 
-    await Promise.all(
-        state.trackerLocations.map(async (loc) => {
-            try {
-                const data = await fetchDiseaseData(loc.geocode, state.currentDisease, period.ewStart, period.ewEnd, period.eyStart, period.eyEnd);
-                loc.data = data;
-                state.trackerDatasets.set(loc.name, data);
-            } catch (err) {
-                console.error(`Erro ao recarregar ${loc.name}:`, err);
-            }
-        })
-    );
+    // Rt
+    const rt = latest.Rt;
+    const rtVal = document.getElementById('kpi-rt-value');
+    const rtSub = document.getElementById('kpi-rt-sub');
+    const kpiRt = document.getElementById('kpi-rt');
+    if (rtVal) rtVal.textContent = rt > 0 ? rt.toFixed(2) : '--';
+    if (rtSub && rt > 0) {
+        const trend = rt > 1 ? '↑ crescendo' : '↓ controlando';
+        rtSub.textContent = trend;
+        rtSub.style.color = rt > 1 ? 'var(--alert-red)' : 'var(--alert-green)';
+        if (kpiRt) kpiRt.style.setProperty('--kpi-accent', rt > 1 ? 'var(--alert-red)' : 'var(--alert-green)');
+    }
 
-    updateTrackerCharts();
-    updateChartTitle();
+    // Cases
+    const casosEst = latest.casos_est || latest.casos || 0;
+    const casosNot = latest.casos || 0;
+    const casosVal = document.getElementById('kpi-cases-value');
+    const casosSub = document.getElementById('kpi-cases-sub');
+    if (casosVal) casosVal.textContent = Math.round(casosEst).toLocaleString('pt-BR');
+    if (casosSub) casosSub.textContent = `${Math.round(casosNot).toLocaleString('pt-BR')} notificados`;
+
+    // Incidence
+    const inc = latest.p_inc100k || 0;
+    const prt1 = latest.p_rt1 != null ? (latest.p_rt1 * 100).toFixed(0) : null;
+    const incVal = document.getElementById('kpi-inc-value');
+    const incSub = document.getElementById('kpi-inc-sub');
+    if (incVal) incVal.textContent = inc > 0 ? inc.toFixed(1) : '--';
+    if (incSub) incSub.textContent = prt1 != null ? `Prob. Rt>1: ${prt1}%` : 'por 100k hab.';
 }
 
-// ===== Init Tracker Toggle Listeners =====
-function initTrackerToggles() {
+// ===== Tracker: Update City Info in Sidebar =====
+function updateCityInfoCard(name, data, year) {
+    const section = document.getElementById('city-info-section');
+    const card = document.getElementById('city-info-card');
+    if (!section || !card) return;
 
-    // Period change listeners
-    ['ew-start', 'ew-end', 'ey-start', 'ey-end'].forEach(id => {
-        document.getElementById(id)?.addEventListener('change', () => {
-            reloadTrackerData();
-        });
-    });
+    const totalCases = data.reduce((s, d) => s + (d.casos || 0), 0);
+    const latest = data[data.length - 1];
+    section.style.display = '';
+    card.innerHTML = `
+        <div style="font-weight:700;color:var(--text-primary);margin-bottom:6px;">${name}</div>
+        <div style="color:var(--text-secondary);line-height:1.8;">
+            <div>Ano analisado: <strong>${year}</strong></div>
+            <div>Total de semanas: <strong>${data.length}</strong></div>
+            <div>Total casos (ano): <strong>${totalCases.toLocaleString('pt-BR')}</strong></div>
+            ${latest ? `<div>Última SE: <strong>SE ${latest.SE % 100}</strong></div>` : ''}
+        </div>
+    `;
+}
 
-    // Share button
-    document.getElementById('btn-share')?.addEventListener('click', () => {
-        const url = window.location.href;
-        navigator.clipboard?.writeText(url).then(() => {
-            const btn = document.getElementById('btn-share');
-            const orig = btn.innerHTML;
-            btn.innerHTML = '✓ Copiado!';
-            setTimeout(() => { btn.innerHTML = orig; }, 2000);
-        });
-    });
+// ===== Tracker: Show/Hide Profile State =====
+function setTrackerState(state_) {
+    // states: 'empty' | 'loading' | 'profile'
+    document.getElementById('tracker-empty-state')?.classList.toggle('hidden', state_ !== 'empty');
+    document.getElementById('tracker-loading')?.classList.toggle('hidden', state_ !== 'loading');
+    document.getElementById('tracker-profile')?.classList.toggle('hidden', state_ !== 'profile');
+}
+
+// ===== Tracker: Load City Profile =====
+async function loadCityProfile(geocode, name) {
+    const year = new Date().getFullYear();
+    const comparePrev = document.getElementById('compare-prev-year')?.checked;
+
+    // Update header
+    const titleEl = document.getElementById('chart-main-title');
+    const info = getDiseaseInfo(state.currentDisease);
+    if (titleEl) titleEl.textContent = `${info.name} — ${name}`;
+
+    const badgeEl = document.getElementById('tracker-year-badge');
+    if (badgeEl) { badgeEl.textContent = `${year}`; badgeEl.style.display = ''; }
+
+    setTrackerState('loading');
+
+    try {
+        const data = await fetchDiseaseData(geocode, state.currentDisease, 1, 52, year, year);
+        let prevData = null;
+
+        if (comparePrev) {
+            try {
+                prevData = await fetchDiseaseData(geocode, state.currentDisease, 1, 52, year - 1, year - 1);
+                if (badgeEl) badgeEl.textContent = `${year - 1} vs ${year}`;
+            } catch { /* ignore prev year errors */ }
+        }
+
+        state.currentCity = { geocode, name, data, prevYearData: prevData };
+
+        // Update KPI cards with latest week data
+        updateKpiCards(data);
+
+        // Update sidebar city info
+        updateCityInfoCard(name, data, year);
+
+        // Build epidemic curve datasets
+        const epicDatasets = { [`${name} (${year})`]: data };
+        if (prevData && prevData.length > 0) {
+            // Remap prevData SE to same week numbers for overlay alignment
+            epicDatasets[`${name} (${year - 1})`] = prevData;
+        }
+
+        // Render charts
+        renderEpidemicCurve(epicDatasets, state.currentDisease);
+        renderRtChart(new Map([[`${name} (${year})`, data]]), state.currentDisease);
+        renderClimateChart(data, name);
+
+        setTrackerState('profile');
+
+    } catch (err) {
+        console.error(`Erro ao carregar perfil de ${name}:`, err);
+        setTrackerState('empty');
+    }
 }
 
 // ===== Init Map Search → Switch to Tracker =====
 function initMapSearchToTracker(geocode, name) {
-    // Switch to tracker and add location
     switchView('tracker');
-    addTrackerLocation(geocode, name);
+    loadCityProfile(geocode, name);
 }
 
 // ===== App Init =====
 async function init() {
     console.log('VigiSaude Brasil — Inicializando...');
 
-    // Navigation
     initNavigation();
 
     // Map view
     initMap('map', (ufId, ufAbbr, ufName) => {
-        // On state click → switch to tracker with a capital from that state
         console.log(`Estado clicado: ${ufName} (${ufAbbr})`);
     });
 
-    // Region filters
-    initRegionFilters((region) => {
-        fitRegion(region);
-    });
+    initRegionFilters((region) => { fitRegion(region); });
 
     // Map layer toggles
     const layerBtns = document.querySelectorAll('.layer-btn');
     layerBtns.forEach(btn => {
         btn.addEventListener('click', (e) => {
-            // Update active styling
             layerBtns.forEach(b => b.classList.remove('active'));
             e.currentTarget.classList.add('active');
-
-            const layer = e.currentTarget.dataset.layer;
-            setMapLayer(layer);
+            setMapLayer(e.currentTarget.dataset.layer);
         });
     });
 
-    // Search
+    // Map search
     initSearch(initMapSearchToTracker);
 
-    // Disease cards
+    // Disease cards (map view)
     const cardsContainer = document.getElementById('disease-cards');
     initCards(cardsContainer, async (disease) => {
         state.currentDisease = disease;
@@ -331,26 +302,44 @@ async function init() {
         await loadNationalData(disease);
     });
 
-    // Tracker view
-    await initTrackerSelectors(addTrackerLocation);
-    initPeriodControls();
+    // Tracker — city selector
+    await initTrackerSelectors(loadCityProfile);
+
+    // Tracker — disease toggle
     initPathogenTags(async (disease) => {
         state.currentDisease = disease;
         setActiveDisease(disease);
-        updateChartTitle();
-        await reloadTrackerData();
+        const info = getDiseaseInfo(disease);
+        const titleEl = document.getElementById('chart-main-title');
+        if (state.currentCity) {
+            if (titleEl) titleEl.textContent = `${info.name} — ${state.currentCity.name}`;
+            await loadCityProfile(state.currentCity.geocode, state.currentCity.name);
+        } else {
+            if (titleEl) titleEl.textContent = 'Selecione um município';
+        }
     });
-    initChartToggle((chartType) => {
-        // Could switch chart type; for now line chart is default
-        console.log(`Tipo de gráfico: ${chartType}`);
-    });
-    initTrackerToggles();
 
-    // Load initial data
+    // Tracker — compare previous year toggle
+    document.getElementById('compare-prev-year')?.addEventListener('change', () => {
+        if (state.currentCity) {
+            loadCityProfile(state.currentCity.geocode, state.currentCity.name);
+        }
+    });
+
+    // Share button
+    document.getElementById('btn-share')?.addEventListener('click', () => {
+        navigator.clipboard?.writeText(window.location.href).then(() => {
+            const btn = document.getElementById('btn-share');
+            const orig = btn.innerHTML;
+            btn.innerHTML = '✓ Copiado!';
+            setTimeout(() => { btn.innerHTML = orig; }, 2000);
+        });
+    });
+
+    // Load initial map data
     await loadNationalData('dengue');
 
     console.log('✅ VigiSaúde Brasil — Pronto!');
 }
 
-// Start the app
 document.addEventListener('DOMContentLoaded', init);

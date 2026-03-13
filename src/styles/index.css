@@ -812,7 +812,7 @@ body {
   border-radius: var(--radius-md);
   max-height: 300px;
   overflow-y: auto;
-  z-index: 100;
+  z-index: 1000;
   box-shadow: var(--glass-shadow);
 }
 
@@ -1298,4 +1298,109 @@ body {
 
   .charts-grid       { grid-template-columns: 1fr; }
   .national-summary  { grid-template-columns: 1fr; }
+}
+
+/* ===== KPI Cards — Tracker Profile ===== */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.kpi-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  transition: var(--transition-fast);
+}
+
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--kpi-accent, var(--accent-primary));
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.kpi-label {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.kpi-value {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.1;
+  margin-bottom: 4px;
+}
+
+.kpi-sub {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  line-height: 1.4;
+}
+
+.compare-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 8px 0;
+}
+
+.compare-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+}
+
+.city-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: var(--space-xl);
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.chart-panel__header {
+  padding: 14px 16px 6px;
+  border-bottom: 1px solid rgba(148,163,184,0.1);
+  margin-bottom: 8px;
+}
+.chart-panel__header h3 {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 2px;
+}
+.chart-panel__header p {
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+.tracker-charts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+@media (max-width: 768px) {
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
 }

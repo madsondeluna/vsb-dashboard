@@ -29,6 +29,8 @@ let mainChart = null;
 let rtChart = null;
 let incidenceChart = null;
 let climateChart = null;
+let epidemicChart = null;
+let climateWeeklyChart = null;
 
 function destroyChart(chart) {
     if (chart) chart.destroy();
@@ -541,6 +543,176 @@ export function renderSanitationComparison(canvasId, datasetsMap, disease = 'den
                     title: { display: true, text: 'Incidência/100k hab.', font: { size: 11, weight: '500' } },
                     min: 0,
                     ticks: { callback: v => v.toFixed(0) },
+                },
+            },
+        },
+    });
+}
+
+// ===== Epidemic Curve — Weekly Cases (tracker profile) =====
+// datasetsMap: { 'City Name (2025)': data[], 'City Name (2024)': data[] }
+export function renderEpidemicCurve(datasetsMap, disease = 'dengue') {
+    epidemicChart = destroyChart(epidemicChart);
+
+    const canvas = document.getElementById('epidemic-curve-chart');
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    const datasets = [];
+    let colorIdx = 0;
+
+    for (const [label, data] of Object.entries(datasetsMap)) {
+        if (!data || data.length === 0) continue;
+        const color = CHART_COLORS[colorIdx % CHART_COLORS.length];
+        const isPrevYear = label.includes('(') && !label.includes(String(new Date().getFullYear()));
+
+        datasets.push({
+            label,
+            data: data.map(d => ({ x: formatSEShort(d.SE), y: d.casos || 0 })),
+            backgroundColor: isPrevYear ? color + '44' : color + 'bb',
+            borderColor: color,
+            borderWidth: isPrevYear ? 1 : 1.5,
+            borderDash: isPrevYear ? [4, 4] : [],
+            borderRadius: 3,
+            type: isPrevYear ? 'line' : 'bar',
+            tension: 0.3,
+            pointRadius: isPrevYear ? 0 : undefined,
+            yAxisID: 'y',
+            order: isPrevYear ? 2 : 1,
+        });
+        colorIdx++;
+    }
+
+    if (datasets.length === 0) return;
+
+    // Build unified week labels from all datasets
+    const allWeekLabels = [...new Set(
+        Object.values(datasetsMap).flatMap(d => d.map(r => formatSEShort(r.SE)))
+    )].sort((a, b) => parseInt(a.replace('SE ', '')) - parseInt(b.replace('SE ', '')));
+
+    epidemicChart = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: allWeekLabels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { position: 'top', align: 'start', labels: { boxWidth: 12, font: { size: 11 } } },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => `${ctx.dataset.label}: ${Math.round(ctx.parsed.y).toLocaleString('pt-BR')} casos`,
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { maxTicksLimit: 13, font: { size: 10 } },
+                },
+                y: {
+                    type: 'linear',
+                    position: 'left',
+                    min: 0,
+                    grid: { color: 'rgba(148, 163, 184, 0.08)' },
+                    title: { display: true, text: 'Casos por Semana Epidemiológica', font: { size: 11, weight: '500' } },
+                    ticks: { callback: v => v.toLocaleString('pt-BR') },
+                },
+            },
+        },
+    });
+}
+
+// ===== Climate Chart — Weekly Temperature & Humidity (tracker profile) =====
+export function renderClimateChart(data, cityName = '') {
+    climateWeeklyChart = destroyChart(climateWeeklyChart);
+
+    const canvas = document.getElementById('climate-chart');
+    const panel = document.getElementById('climate-chart-panel');
+    if (!canvas) return;
+
+    // Filter weeks with valid climate data
+    const weeks = data.filter(d => d.tempmed > 0 || d.umidmed > 0);
+    if (weeks.length === 0) {
+        if (panel) panel.classList.add('hidden');
+        return;
+    }
+    if (panel) panel.classList.remove('hidden');
+
+    const labels = weeks.map(d => formatSEShort(d.SE));
+    const tempData = weeks.map(d => d.tempmed > 0 ? parseFloat(d.tempmed.toFixed(1)) : null);
+    const umidData = weeks.map(d => d.umidmed > 0 ? parseFloat(d.umidmed.toFixed(1)) : null);
+
+    const ctx = canvas.getContext('2d');
+    climateWeeklyChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Temperatura Média (°C)',
+                    data: tempData,
+                    borderColor: '#f97316',
+                    backgroundColor: 'rgba(249,115,22,0.08)',
+                    tension: 0.4,
+                    pointRadius: 2,
+                    borderWidth: 2,
+                    yAxisID: 'yTemp',
+                    spanGaps: true,
+                    fill: true,
+                },
+                {
+                    label: 'Umidade Média (%)',
+                    data: umidData,
+                    borderColor: '#6baed6',
+                    backgroundColor: 'transparent',
+                    tension: 0.4,
+                    pointRadius: 2,
+                    borderWidth: 2,
+                    borderDash: [5, 4],
+                    yAxisID: 'yUmid',
+                    spanGaps: true,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { position: 'top', align: 'start', labels: { boxWidth: 12, font: { size: 11 } } },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => {
+                            const v = ctx.parsed.y;
+                            if (v === null) return null;
+                            return ctx.dataset.label.includes('Temp')
+                                ? `${ctx.dataset.label}: ${v.toFixed(1)}°C`
+                                : `${ctx.dataset.label}: ${v.toFixed(1)}%`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { maxTicksLimit: 13, font: { size: 10 } },
+                },
+                yTemp: {
+                    type: 'linear',
+                    position: 'left',
+                    grid: { color: 'rgba(148, 163, 184, 0.08)' },
+                    title: { display: true, text: 'Temperatura (°C)', font: { size: 11, weight: '500' } },
+                    ticks: { callback: v => `${v}°C` },
+                },
+                yUmid: {
+                    type: 'linear',
+                    position: 'right',
+                    min: 0,
+                    max: 100,
+                    grid: { drawOnChartArea: false },
+                    title: { display: true, text: 'Umidade (%)', font: { size: 11, weight: '500' } },
+                    ticks: { callback: v => `${v}%` },
                 },
             },
         },
