@@ -2,8 +2,7 @@
  * VigiSaúde Brasil — Map Component
  * Interactive Leaflet map with:
  * - Disease alert choropleth (single disease)
- * - Multi-pathogen heatmap (3 diseases simultaneously)
- * - Sewage relief layer (circle size = collection, color = treatment)
+ * - Sanitation coverage choropleth (coleta/tratamento de esgoto)
  * - Municipality-level zoom
  */
 import L from 'leaflet';
@@ -18,14 +17,8 @@ let geoLayer = null;       // State-level choropleth layer
 let currentRegion = 'all';
 let onStateClick = null;
 let currentDisease = 'dengue';
-let currentMapLayer = 'disease';  // 'disease' | 'heatmap' | 'coletaEsgoto' | 'tratamentoEsgoto' | 'esgotoRelevo'
+let currentMapLayer = 'disease';  // 'disease' | 'coletaEsgoto' | 'tratamentoEsgoto'
 let lastCapitalData = [];
-
-// ===== Heatmap state =====
-let allDiseaseDataForHeatmap = {};  // { disease: [capitalData] }
-
-// ===== Sewage relief layer (circleMarkers) =====
-let esgotoRelevoLayer = null;
 
 // Municipality zoom management
 const MUNICIPIO_ZOOM_THRESHOLD = 6;
@@ -233,340 +226,13 @@ function getSanitationOpacity(percent) {
     return 0.35 + (percent / 100) * 0.4;
 }
 
-// ===== HEATMAP MULTI-PATÓGENO (SVG overlay com blur) =====
-
-// Disease color definitions for SVG heatmap (light map, multiply blend)
-const HEAT_DISEASE_CONFIGS = {
-    dengue:      { stops: ['#a07010', '#c89828', '#e8c060'], opacity: 0.65 },
-    chikungunya: { stops: ['#a03070', '#cc68a0', '#f0b8d8'], opacity: 0.60 },
-    zika:        { stops: ['#503090', '#8868c0', '#c8b8e8'], opacity: 0.55 },
-};
-
-// SVG heatmap overlay container
-let heatmapSvgOverlay = null;
-
-function clearHeatLayers() {
-    if (heatmapSvgOverlay) {
-        map.removeLayer(heatmapSvgOverlay);
-        heatmapSvgOverlay = null;
-    }
-}
-
-/**
- * Render multi-pathogen heatmap using a custom SVG overlay.
- * allData: { dengue: [capitalData], chikungunya: [...], zika: [...] }
- */
-export function setMapHeatmap(allData) {
-    allDiseaseDataForHeatmap = allData;
-    clearHeatLayers();
-
-    // Make GeoLayer translucent backdrop
-    if (geoLayer) {
-        geoLayer.setStyle({
-            fillColor: '#050c1f',
-            fillOpacity: 0.75,
-            weight: 1,
-            color: 'rgba(0,0,0,0.12)',
-        });
-    }
-
-    const diseases = ['dengue', 'chikungunya', 'zika'];
-
-    // Find global max cases across all diseases for normalization
-    let globalMax = 1;
-    diseases.forEach(disease => {
-        const data = allData[disease];
-        if (!data) return;
-        data.forEach(d => {
-            if (d.latest?.casos > globalMax) globalMax = d.latest.casos;
-        });
-    });
-
-    // Build SVG content
-    // We use a custom Leafet SVG layer covering the whole map
-    const svgNS = 'http://www.w3.org/2000/svg';
-
-    // Create the SVG overlay using Leaflet's SVGOverlay
-    // Bounds that cover all of Brazil
-    const brazilBounds = L.latLngBounds([[-33.75, -73.99], [5.27, -34.79]]);
-
-    const svgElement = document.createElementNS(svgNS, 'svg');
-    svgElement.setAttribute('xmlns', svgNS);
-    svgElement.setAttribute('viewBox', '0 0 1000 800');
-    svgElement.style.overflow = 'visible';
-
-    // Add defs for gradients and filters
-    const defs = document.createElementNS(svgNS, 'defs');
-
-    // Add blur filter
-    const filter = document.createElementNS(svgNS, 'filter');
-    filter.setAttribute('id', 'heat-blur');
-    filter.setAttribute('x', '-50%');
-    filter.setAttribute('y', '-50%');
-    filter.setAttribute('width', '200%');
-    filter.setAttribute('height', '200%');
-    const feGaussianBlur = document.createElementNS(svgNS, 'feGaussianBlur');
-    feGaussianBlur.setAttribute('stdDeviation', '28');
-    feGaussianBlur.setAttribute('result', 'blur');
-    filter.appendChild(feGaussianBlur);
-    defs.appendChild(filter);
-
-    svgElement.appendChild(defs);
-
-    // Group per disease (layered on top of each other)
-    diseases.forEach(disease => {
-        const data = allData[disease];
-        if (!data || data.length === 0) return;
-        const cfg = HEAT_DISEASE_CONFIGS[disease];
-
-        const group = document.createElementNS(svgNS, 'g');
-        group.setAttribute('style', `mix-blend-mode: multiply;`);
-        group.setAttribute('opacity', cfg.opacity);
-
-        data.forEach(cap => {
-            if (!cap.latest || !cap.latest.casos) return;
-            const centroid = UF_CENTROIDS[cap.uf];
-            if (!centroid) return;
-
-            // Map lat/lng to SVG coordinates (simplified linear mapping for Brazil)
-            // Brazil: lat -33.75 to 5.27, lng -73.99 to -34.79
-            const svgX = ((centroid[1] - (-73.99)) / (-34.79 - (-73.99))) * 1000;
-            const svgY = ((centroid[0] - 5.27) / (-33.75 - 5.27)) * 800;
-
-            // Radius proportional to sqrt of cases
-            const intensity = Math.sqrt(cap.latest.casos / globalMax);
-            const r = 40 + intensity * 160;
-
-            // Create radial gradient for this circle
-            const gradId = `grad-${disease}-${cap.uf}`;
-            const grad = document.createElementNS(svgNS, 'radialGradient');
-            grad.setAttribute('id', gradId);
-            grad.setAttribute('cx', '50%');
-            grad.setAttribute('cy', '50%');
-            grad.setAttribute('r', '50%');
-
-            const stop0 = document.createElementNS(svgNS, 'stop');
-            stop0.setAttribute('offset', '0%');
-            stop0.setAttribute('stop-color', cfg.stops[2]);
-            stop0.setAttribute('stop-opacity', '0.9');
-
-            const stop1 = document.createElementNS(svgNS, 'stop');
-            stop1.setAttribute('offset', '35%');
-            stop1.setAttribute('stop-color', cfg.stops[1]);
-            stop1.setAttribute('stop-opacity', '0.65');
-
-            const stop2 = document.createElementNS(svgNS, 'stop');
-            stop2.setAttribute('offset', '70%');
-            stop2.setAttribute('stop-color', cfg.stops[0]);
-            stop2.setAttribute('stop-opacity', '0.3');
-
-            const stop3 = document.createElementNS(svgNS, 'stop');
-            stop3.setAttribute('offset', '100%');
-            stop3.setAttribute('stop-color', cfg.stops[0]);
-            stop3.setAttribute('stop-opacity', '0');
-
-            grad.appendChild(stop0);
-            grad.appendChild(stop1);
-            grad.appendChild(stop2);
-            grad.appendChild(stop3);
-            defs.appendChild(grad);
-
-            // Create circle
-            const circle = document.createElementNS(svgNS, 'circle');
-            circle.setAttribute('cx', svgX);
-            circle.setAttribute('cy', svgY);
-            circle.setAttribute('r', r);
-            circle.setAttribute('fill', `url(#${gradId})`);
-            circle.setAttribute('filter', 'url(#heat-blur)');
-
-            group.appendChild(circle);
-        });
-
-        svgElement.appendChild(group);
-    });
-
-    // Create SVG layer over Brazil
-    heatmapSvgOverlay = L.svgOverlay(svgElement, brazilBounds, {
-        opacity: 1,
-        interactive: false,
-        zIndex: 400,
-    });
-    heatmapSvgOverlay.addTo(map);
-
-    updateLegend('heatmap');
-}
-
-// ===== SEWAGE RELIEF LAYER =====
-
-/**
- * Color for treatment coverage: blue=good, red=bad
- */
-function getTreatmentColor(percent) {
-    if (percent >= 70) return '#5ab0d8';
-    if (percent >= 55) return '#74c496';
-    if (percent >= 40) return '#a8c860';
-    if (percent >= 25) return '#c89828';
-    return '#c05858';
-}
-
-function clearEsgotoRelevoLayer() {
-    if (esgotoRelevoLayer) {
-        map.removeLayer(esgotoRelevoLayer);
-        esgotoRelevoLayer = null;
-    }
-}
-
-export function setMapEsgotoRelevo() {
-    clearEsgotoRelevoLayer();
-    clearHeatLayers();
-
-    const sanitationData = getSanitationData();
-
-    // Restore geoLayer as subtle backdrop
-    if (geoLayer) {
-        geoLayer.setStyle({
-            fillColor: '#0f172a',
-            fillOpacity: 0.55,
-            weight: 1.2,
-            color: 'rgba(0,0,0,0.15)',
-        });
-    }
-
-    // Min/max collection for radius scaling
-    const coletas = Object.values(sanitationData).map(s => s.coletaEsgoto);
-    const minColeta = Math.min(...coletas);
-    const maxColeta = Math.max(...coletas);
-
-    const markerGroup = L.layerGroup();
-
-    Object.entries(sanitationData).forEach(([uf, data]) => {
-        const centroid = UF_CENTROIDS[uf];
-        if (!centroid) return;
-
-        // Radius: 10–55 based on collection coverage
-        const normalized = (data.coletaEsgoto - minColeta) / (maxColeta - minColeta);
-        const radius = 10 + normalized * 45;
-
-        // Fill color derived from treatment percentage
-        const fillColor = getTreatmentColor(data.tratamentoEsgoto);
-
-        // Outer glow ring
-        const outerCircle = L.circleMarker([centroid[0], centroid[1]], {
-            radius: radius + 5,
-            fillColor: fillColor,
-            fillOpacity: 0.08,
-            color: fillColor,
-            weight: 1.2,
-            opacity: 0.4,
-        });
-
-        // Main circle
-        const circle = L.circleMarker([centroid[0], centroid[1]], {
-            radius: radius,
-            fillColor: fillColor,
-            fillOpacity: 0.45,
-            color: fillColor,
-            weight: 2,
-            opacity: 0.9,
-        });
-
-        // Inner bright dot
-        const innerDot = L.circleMarker([centroid[0], centroid[1]], {
-            radius: Math.max(4, radius * 0.18),
-            fillColor: '#ffffff',
-            fillOpacity: 0.6,
-            color: 'transparent',
-            weight: 0,
-        });
-
-        // UF label
-        const label = L.marker([centroid[0], centroid[1]], {
-            icon: L.divIcon({
-                className: '',
-                html: `<div style="
-                    color:#fff;
-                    font-size:9px;
-                    font-weight:700;
-                    font-family:'JetBrains Mono',monospace;
-                    text-align:center;
-                    text-shadow:0 1px 3px rgba(0,0,0,0.9);
-                    pointer-events:none;
-                    white-space:nowrap;
-                    transform:translate(-50%,-50%);
-                    position:absolute;
-                    top:0;left:0;
-                ">${uf}</div>`,
-                iconSize: [0, 0],
-                iconAnchor: [0, 0],
-            }),
-        });
-
-        // Popup with both metrics
-        const popupHTML = `
-            <div class="popup-content">
-                <h4>${data.nome}</h4>
-                <div class="popup-stats">
-                    <div class="popup-stat">
-                        <span class="popup-stat__label">Coleta de Esgoto</span>
-                        <span class="popup-stat__value" style="color:${fillColor}">${data.coletaEsgoto}%</span>
-                    </div>
-                    <div class="popup-stat">
-                        <span class="popup-stat__label">Tratamento de Esgoto</span>
-                        <span class="popup-stat__value" style="color:${fillColor}">${data.tratamentoEsgoto}%</span>
-                    </div>
-                    <div class="popup-stat">
-                        <span class="popup-stat__label">IDH</span>
-                        <span class="popup-stat__value">${data.idh}</span>
-                    </div>
-                </div>
-                <div style="margin-top:8px;font-size:0.73rem;color:var(--text-tertiary)">
-                    ⬤ Tamanho do círculo → % coleta<br>
-                    ⬤ Cor → % tratamento (azul=bom, vermelho=ruim)
-                </div>
-            </div>`;
-
-        outerCircle.bindPopup(popupHTML);
-        circle.bindPopup(popupHTML);
-
-        outerCircle.on('mouseover', function () { this.setStyle({ fillOpacity: 0.15, opacity: 0.7 }); });
-        outerCircle.on('mouseout', function () { this.setStyle({ fillOpacity: 0.08, opacity: 0.4 }); });
-        circle.on('mouseover', function () { this.setStyle({ fillOpacity: 0.7, weight: 3 }); });
-        circle.on('mouseout', function () { this.setStyle({ fillOpacity: 0.45, weight: 2 }); });
-
-        markerGroup.addLayer(outerCircle);
-        markerGroup.addLayer(circle);
-        markerGroup.addLayer(innerDot);
-        markerGroup.addLayer(label);
-    });
-
-    markerGroup.addTo(map);
-    esgotoRelevoLayer = markerGroup;
-
-    updateLegend('esgotoRelevo');
-}
-
 // ===== Set Map Layer =====
 export function setMapLayer(layer) {
     currentMapLayer = layer;
-
-    // Clean up special layers when switching away
-    // Always remove municipality disease layers when switching layers
     removeMunicipioLayers();
-
-    if (layer !== 'heatmap') clearHeatLayers();
-    if (layer !== 'esgotoRelevo') clearEsgotoRelevoLayer();
-
-    if (layer === 'heatmap') {
-        if (Object.keys(allDiseaseDataForHeatmap).length > 0) {
-            setMapHeatmap(allDiseaseDataForHeatmap);
-        }
-    } else if (layer === 'esgotoRelevo') {
-        setMapEsgotoRelevo();
-    } else {
-        updateLegend(layer);
-        if (geoLayer) {
-            loadGeoJSON(lastCapitalData);
-        }
+    updateLegend(layer);
+    if (geoLayer) {
+        loadGeoJSON(lastCapitalData);
     }
 }
 
@@ -575,33 +241,7 @@ function updateLegend(layer) {
     const legendEl = document.getElementById('map-legend');
     if (!legendEl) return;
 
-    if (layer === 'heatmap') {
-        legendEl.innerHTML = `
-            <div style="font-size:0.72rem;color:var(--text-tertiary);margin-bottom:6px;">Intensidade por nº de casos</div>
-            <div class="legend-item">
-                <span class="legend-color" style="background:linear-gradient(90deg,#f59e0b,#fb923c,#fbbf24)"></span>
-                <span style="color:#f59e0b">Dengue</span>
-            </div>
-            <div class="legend-item">
-                <span class="legend-color" style="background:linear-gradient(90deg,#ec4899,#f472b6,#fce7f3)"></span>
-                <span style="color:#ec4899">Chikungunya</span>
-            </div>
-            <div class="legend-item">
-                <span class="legend-color" style="background:linear-gradient(90deg,#8b5cf6,#a78bfa,#ede9fe)"></span>
-                <span style="color:#a78bfa">Zika</span>
-            </div>
-        `;
-    } else if (layer === 'esgotoRelevo') {
-        legendEl.innerHTML = `
-            <div style="font-size:0.72rem;color:var(--text-tertiary);margin-bottom:6px;">Tamanho = % coleta · Cor = % tratamento</div>
-            <div class="legend-item"><span class="legend-color" style="background:#06b6d4"></span>≥ 70% tratamento</div>
-            <div class="legend-item"><span class="legend-color" style="background:#22d3ee"></span>55–69%</div>
-            <div class="legend-item"><span class="legend-color" style="background:#a3e635"></span>40–54%</div>
-            <div class="legend-item"><span class="legend-color" style="background:#f59e0b"></span>25–39%</div>
-            <div class="legend-item"><span class="legend-color" style="background:#ef4444"></span>&lt; 25% tratamento</div>
-            <div style="margin-top:8px;font-size:0.72rem;color:var(--text-tertiary)">Círculo maior = mais coleta</div>
-        `;
-    } else if (layer === 'disease') {
+    if (layer === 'disease') {
         legendEl.innerHTML = `
             <div class="legend-item"><span class="legend-color" style="background: var(--alert-green)"></span>Nível 1 — Verde</div>
             <div class="legend-item"><span class="legend-color" style="background: var(--alert-yellow)"></span>Nível 2 — Atenção</div>
@@ -662,12 +302,6 @@ export async function loadGeoJSON(capitalData = []) {
                         fillColor = getAlertColorHex(capData.latest.nivel);
                         fillOpacity = currentRegion !== 'all' && region !== currentRegion ? 0.15 : 0.55;
                     }
-                } else if (currentMapLayer === 'heatmap') {
-                    fillColor = '#0d1427';
-                    fillOpacity = 0.3;
-                } else if (currentMapLayer === 'esgotoRelevo') {
-                    fillColor = '#0f172a';
-                    fillOpacity = 0.55;
                 } else if (sanitation) {
                     const val = sanitation[currentMapLayer] || 0;
                     fillColor = getSanitationColor(val);
@@ -724,13 +358,10 @@ export async function loadGeoJSON(capitalData = []) {
                 layer.bindPopup(popupHTML);
 
                 layer.on('mouseover', function () {
-                    // No hover highlight in heatmap or esgoto modes — would break the visualization
-                    if (currentMapLayer === 'heatmap' || currentMapLayer === 'esgotoRelevo') return;
                     this.setStyle({ weight: 2, color: '#6baed6', fillOpacity: 0.72 });
                     this.bringToFront();
                 });
                 layer.on('mouseout', function () {
-                    if (currentMapLayer === 'heatmap' || currentMapLayer === 'esgotoRelevo') return;
                     geoLayer.resetStyle(this);
                 });
                 layer.on('click', function () {
@@ -744,13 +375,6 @@ export async function loadGeoJSON(capitalData = []) {
         if (loadingEl) loadingEl.classList.add('hidden');
 
         fitRegion(currentRegion);
-
-        // Re-render special layers on top after geo reload
-        if (currentMapLayer === 'heatmap' && Object.keys(allDiseaseDataForHeatmap).length > 0) {
-            setMapHeatmap(allDiseaseDataForHeatmap);
-        } else if (currentMapLayer === 'esgotoRelevo') {
-            setMapEsgotoRelevo();
-        }
 
     } catch (err) {
         console.error('Erro ao carregar GeoJSON:', err);
