@@ -103,7 +103,8 @@ export function renderCorrelationChart(datasetsMap, disease = 'dengue', year = n
         });
 
         const casosArray = monthlyData.map(m => m.casos);
-        const tempArray = monthlyData.map(m => m.tempCount > 0 ? (m.tempSum / m.tempCount) : null);
+        // Normalize temperature to 0–100 scale (15–42°C range) so it shares y1 with humidity
+        const tempArray = monthlyData.map(m => m.tempCount > 0 ? ((m.tempSum / m.tempCount - 15) / (42 - 15)) * 100 : null);
         const umidArray = monthlyData.map(m => m.umidCount > 0 ? (m.umidSum / m.umidCount) : null);
 
         // 2. Add Cases (Bar) - primary Y axis
@@ -144,7 +145,7 @@ export function renderCorrelationChart(datasetsMap, disease = 'dengue', year = n
             pointRadius: 2,
             borderWidth: 2,
             type: 'line',
-            yAxisID: 'y2',
+            yAxisID: 'y1',
             spanGaps: true,
             order: 2
         });
@@ -173,7 +174,7 @@ export function renderCorrelationChart(datasetsMap, disease = 'dengue', year = n
                             if (value === null || value === undefined) return null;
                             if (label.includes('Casos')) return `${label}: ${Math.round(value).toLocaleString('pt-BR')}`;
                             if (label.includes('Umidade')) return `${label}: ${value.toFixed(1)}%`;
-                            if (label.includes('Temp')) return `${label}: ${value.toFixed(1)}°C`;
+                            if (label.includes('Temp')) return `${label}: ${((value / 100) * (42 - 15) + 15).toFixed(1)}°C`;
                             return `${label}: ${value}`;
                         }
                     }
@@ -196,19 +197,10 @@ export function renderCorrelationChart(datasetsMap, disease = 'dengue', year = n
                     display: true,
                     position: 'right',
                     grid: { drawOnChartArea: false },
-                    title: { display: true, text: 'Umidade Média (%)', font: { size: 11, weight: '500' } },
+                    title: { display: true, text: 'Umidade (%) / Temp. normalizada', font: { size: 11, weight: '500' } },
                     min: 0,
                     max: 100,
-                },
-                y2: {
-                    type: 'linear',
-                    display: true,
-                    position: 'right',
-                    grid: { drawOnChartArea: false },
-                    title: { display: true, text: 'Temperatura (°C)', font: { size: 11, weight: '500' } },
-                    min: 15,
-                    max: 42,
-                    ticks: { callback: v => `${v}°C` },
+                    ticks: { callback: v => `${v}%` },
                 },
             },
         },
