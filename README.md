@@ -102,12 +102,16 @@ Em desenvolvimento, as chamadas à API do InfoDengue são roteadas via proxy Vit
 
 ## Deploy
 
-O projeto está configurado para deploy como **Static Site** no [Render](https://render.com) via `render.yaml`.
+O projeto está disponível em produção em:
+
+**[https://vsb-dashboard.onrender.com](https://vsb-dashboard.onrender.com)**
+
+Hospedado como **Static Site** no [Render](https://render.com) via `render.yaml`. Qualquer push para `main` dispara um novo deploy automaticamente.
 
 **Build command:** `npm install && npm run build`
 **Publish directory:** `dist`
 
-Para subir manualmente:
+Para gerar o build manualmente:
 
 ```bash
 npm run build
